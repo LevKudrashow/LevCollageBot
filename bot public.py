@@ -37,7 +37,7 @@ def handle_document(message):
             misspelled += 1
     if misspelled >= 1:
         markup = types.ReplyKeyboardMarkup(one_time_keyboard=True)
-        markup.add(types.KeyboardButton("Да"), types.KeyboardButton("Нет"))
+        markup.add(types.KeyboardButton("Да"), types.KeyboardButton("Да с просмотром уведомлений"), types.KeyboardButton("Нет"))
         bot.send_message(message.chat.id,
                          "Было найдено " + str(misspelled) + " неправильно введенных тем уроков. Стоит ли уведомить преподавателей?",
                          reply_markup=markup)
@@ -47,7 +47,8 @@ def handle_document(message):
         bot.register_next_step_handler(message, process_group_step)
 
 def process_notify_step(message):
-    if message.text.strip().upper() == "ДА":
+    #if message.text.strip().upper() == "ДА":
+    if re.match(r'^да.*', message.text.lower()):
         user_id = message.from_user.id
         df = current_df.get(user_id)
 
@@ -70,16 +71,23 @@ def process_notify_step(message):
                     f.write(issue + '\n')
 
             message_text = f"Здравствуйте, {teacher_name}, я бот.\nХочу уведомить вас о том, что у вас неправильно введенные темы уроков.\nПрикреплён файл с неправильными темами."
+            document = open(text_filename, 'rb')
             try:
                 bot.send_message(teachers[teacher_name], message_text)
-                with open(text_filename, 'rb') as file_to_send:
-                    bot.send_document(teachers[teacher_name], file_to_send, caption="Неправильные темы")
+                bot.send_document(teachers[teacher_name], document, caption="Неправильные темы")
                 notificated += 1
             except KeyError:
-                bot.send_message(message.chat.id,
-                                 f"Преподавателя \"{teacher_name}\" нет в базе.\nСообщение не было отправленно.")
+                bot.send_message(message.chat.id,f"Преподавателя \"{teacher_name}\" нет в базе.\nСообщение не было отправленно.")
+                notificated -=1
+            if re.match(r'^.*с просмотром уведомлений', message.text.lower()):
+                bot.send_message(message.chat.id, "Уведомление: ")
+                bot.send_message(message.chat.id, message_text)
+                bot.send_document(message.chat.id, document, caption="Неправильные темы")
         if notificated < len(notifications):
-            bot.send_message(message.chat.id, "Не все преподаватели были уведомлены.")
+            if notificated==0:
+                bot.send_message(message.chat.id, "Преподаватели не уведомлены.")
+            else:
+                bot.send_message(message.chat.id, "Не все преподаватели были уведомлены.")
         else:
             bot.send_message(message.chat.id, "Преподаватели уведомлены.")
     else:
